@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <time.h>  // added for timestamps
+#include <time.h>
 
 #define NAME_LEN  50
 #define DIAG_LEN  80
@@ -12,13 +12,13 @@ typedef struct {
     int id;
     char name[NAME_LEN];
     int age;
-    int priority;              // 1 (critical) .. 5 (low)
+    int priority;
     char diagnosis[DIAG_LEN];
-    time_t timestamp;          // timestamp when patient added
+    time_t timestamp;
 } Patient;
 
 typedef struct {
-    Patient *arr;              // dynamic array
+    Patient *arr;
     int size;
     int cap;
 } PatientList;
@@ -62,7 +62,20 @@ static int read_int(const char *prompt, int minv, int maxv) {
     }
 }
 
-/* ===================== Dynamic Array (Pointers/Allocation) ===================== */
+/* ===================== Timestamp Helper ===================== */
+
+static void format_time(time_t t, char *buf, int bufsize) {
+    char *tmp = ctime(&t);
+    if (tmp) {
+        strncpy(buf, tmp, bufsize - 1);
+        buf[bufsize - 1] = '\0';
+        buf[strcspn(buf, "\n")] = '\0';
+    } else {
+        strncpy(buf, "N/A", bufsize - 1);
+    }
+}
+
+/* ===================== Dynamic Array ===================== */
 
 static void init_list(PatientList *L) {
     L->size = 0;
@@ -92,7 +105,7 @@ static void ensure_cap(PatientList *L) {
     L->arr = newArr;
 }
 
-/* ===================== Recursion (merge-sort by ID for binary search) ===================== */
+/* ===================== Merge Sort by ID ===================== */
 
 static void merge_by_id(Patient *a, int l, int m, int r, Patient *tmp) {
     int i = l, j = m+1, k = l;
@@ -121,7 +134,7 @@ static void sort_by_id_for_binary(PatientList *L) {
     free(tmp);
 }
 
-/* ===================== Search (Linear & Binary) ===================== */
+/* ===================== Search ===================== */
 
 static int linear_search_by_name(PatientList *L, const char *needle) {
     for (int i = 0; i < L->size; i++) {
@@ -146,7 +159,7 @@ static int binary_search_by_id(PatientList *L, int id) {
     return -1;
 }
 
-/* ===================== Bubble Sort (Queue order by priority then arrival) ===================== */
+/* ===================== Bubble Sort by Priority ===================== */
 
 static void bubble_sort_by_priority(PatientList *L) {
     for (int i = 0; i < L->size - 1; i++) {
@@ -160,18 +173,14 @@ static void bubble_sort_by_priority(PatientList *L) {
     }
 }
 
-/* ===================== 2D Arrays (Statistics by priority & age groups) ===================== */
+/* ===================== 2D Stats ===================== */
 
 static void show_stats_2d(PatientList *L) {
     int stats[5][4] = {0};
     for (int i = 0; i < L->size; i++) {
         int p = L->arr[i].priority;
         int age = L->arr[i].age;
-        int col = 0;
-        if (age <= 17) col = 0;
-        else if (age <= 40) col = 1;
-        else if (age <= 60) col = 2;
-        else col = 3;
+        int col = (age <= 17) ? 0 : (age <= 40) ? 1 : (age <= 60) ? 2 : 3;
         if (p >= 1 && p <= 5) stats[p-1][col]++;
     }
     printf("\n--- Stats (2D Array): Priority x AgeGroup ---\n");
@@ -202,53 +211,41 @@ static void add_patient(PatientList *L) {
     p.priority = read_int("Enter Priority (1=critical .. 5=low): ", 1, 5);
     safe_readline("Enter Diagnosis: ", p.diagnosis, sizeof(p.diagnosis));
     if (p.diagnosis[0] == '\0') snprintf(p.diagnosis, sizeof(p.diagnosis), "N/A");
-
-    p.timestamp = time(NULL);  // store time
-
+    p.timestamp = time(NULL);
     ensure_cap(L);
     L->arr[L->size++] = p;
-
     bubble_sort_by_priority(L);
-
     printf("Patient added to queue.\n");
 }
 
 static void serve_next(PatientList *L) {
-    if (L->size == 0) {
-        printf("Queue is empty.\n");
-        return;
-    }
+    if (L->size == 0) { printf("Queue is empty.\n"); return; }
     Patient served = L->arr[0];
     for (int i = 1; i < L->size; i++) L->arr[i-1] = L->arr[i];
     L->size--;
-
     char buf[26];
-    ctime_r(&served.timestamp, buf);
-    buf[strcspn(buf, "\n")] = 0;
-
+    format_time(served.timestamp, buf, sizeof(buf));
     printf("\n--- Served Patient ---\n");
     printf("ID: %d | Name: %s | Age: %d | Priority: %d | Dx: %s | Added: %s\n",
            served.id, served.name, served.age, served.priority, served.diagnosis, buf);
 }
 
 static void display_queue(PatientList *L) {
-    if (L->size == 0) {
-        printf("Queue is empty.\n");
-        return;
-    }
+    if (L->size == 0) { printf("Queue is empty.\n"); return; }
     printf("\n--- Current Queue (Priority Order) ---\n");
-    printf("%-6s | %-20s | %-3s | %-8s | %-30s | %-20s\n", "ID", "Name", "Age", "Priority", "Diagnosis", "Added");
-    printf("------------------------------------------------------------------------------------------\n");
+    printf("%-6s | %-20s | %-3s | %-8s | %-30s | %-24s\n",
+           "ID", "Name", "Age", "Priority", "Diagnosis", "Added");
+    printf("-------------------------------------------------------------------------------------------\n");
     for (int i = 0; i < L->size; i++) {
         char buf[26];
-        ctime_r(&L->arr[i].timestamp, buf);
-        buf[strcspn(buf, "\n")] = 0;
-        printf("%-6d | %-20s | %-3d | %-8d | %-30s | %-20s\n",
-               L->arr[i].id, L->arr[i].name, L->arr[i].age, L->arr[i].priority, L->arr[i].diagnosis, buf);
+        format_time(L->arr[i].timestamp, buf, sizeof(buf));
+        printf("%-6d | %-20s | %-3d | %-8d | %-30s | %-24s\n",
+               L->arr[i].id, L->arr[i].name, L->arr[i].age,
+               L->arr[i].priority, L->arr[i].diagnosis, buf);
     }
 }
 
-/* ===================== Search ===================== */
+/* ===================== Search Menu ===================== */
 
 static void search_menu(PatientList *L) {
     int choice = read_int("\nSearch by: 1) ID (Binary)  2) Name (Linear)  => ", 1, 2);
@@ -259,12 +256,11 @@ static void search_menu(PatientList *L) {
         int idx = binary_search_by_id(L, id);
         if (idx == -1) printf("Not found.\n");
         else {
-            Patient *p = &L->arr[idx];
             char buf[26];
-            ctime_r(&p->timestamp, buf);
-            buf[strcspn(buf, "\n")] = 0;
+            format_time(L->arr[idx].timestamp, buf, sizeof(buf));
             printf("FOUND: ID=%d | Name=%s | Age=%d | Priority=%d | Dx=%s | Added: %s\n",
-                   p->id, p->name, p->age, p->priority, p->diagnosis, buf);
+                   L->arr[idx].id, L->arr[idx].name, L->arr[idx].age,
+                   L->arr[idx].priority, L->arr[idx].diagnosis, buf);
         }
         bubble_sort_by_priority(L);
     } else {
@@ -273,12 +269,11 @@ static void search_menu(PatientList *L) {
         int idx = linear_search_by_name(L, name);
         if (idx == -1) printf("Not found.\n");
         else {
-            Patient *p = &L->arr[idx];
             char buf[26];
-            ctime_r(&p->timestamp, buf);
-            buf[strcspn(buf, "\n")] = 0;
+            format_time(L->arr[idx].timestamp, buf, sizeof(buf));
             printf("FOUND: ID=%d | Name=%s | Age=%d | Priority=%d | Dx=%s | Added: %s\n",
-                   p->id, p->name, p->age, p->priority, p->diagnosis, buf);
+                   L->arr[idx].id, L->arr[idx].name, L->arr[idx].age,
+                   L->arr[idx].priority, L->arr[idx].diagnosis, buf);
         }
     }
 }
@@ -288,7 +283,6 @@ static void search_menu(PatientList *L) {
 static void save_to_file(PatientList *L, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) { printf("Cannot open file for writing.\n"); return; }
-
     fprintf(fp, "%d\n", L->size);
     for (int i = 0; i < L->size; i++) {
         fprintf(fp, "%d|%s|%d|%d|%s|%ld\n",
@@ -303,31 +297,24 @@ static void save_to_file(PatientList *L, const char *filename) {
 static int parse_line_to_patient(const char *line, Patient *p) {
     char tmp[LINE_LEN];
     snprintf(tmp, sizeof(tmp), "%s", line);
-
     char *tok = strtok(tmp, "|");
     if (!tok) return 0;
     p->id = atoi(tok);
-
     tok = strtok(NULL, "|");
     if (!tok) return 0;
     snprintf(p->name, sizeof(p->name), "%s", tok);
-
     tok = strtok(NULL, "|");
     if (!tok) return 0;
     p->age = atoi(tok);
-
     tok = strtok(NULL, "|");
     if (!tok) return 0;
     p->priority = atoi(tok);
-
     tok = strtok(NULL, "|");
     if (!tok) return 0;
     snprintf(p->diagnosis, sizeof(p->diagnosis), "%s", tok);
-
     tok = strtok(NULL, "\n");
     if (!tok) return 0;
     p->timestamp = (time_t)atol(tok);
-
     if (p->id <= 0 || p->age < 0 || p->age > 120 || p->priority < 1 || p->priority > 5) return 0;
     if (p->name[0] == '\0') return 0;
     return 1;
@@ -336,14 +323,12 @@ static int parse_line_to_patient(const char *line, Patient *p) {
 static void load_from_file(PatientList *L, const char *filename) {
     FILE *fp = fopen(filename, "r");
     if (!fp) { printf("No file found: %s\n", filename); return; }
-
     int n = 0;
     if (fscanf(fp, "%d\n", &n) != 1 || n < 0) {
         printf("Corrupted file.\n");
         fclose(fp);
         return;
     }
-
     L->size = 0;
     char line[LINE_LEN];
     for (int i = 0; i < n; i++) {
@@ -378,13 +363,10 @@ static void print_menu(void) {
 int main(void) {
     PatientList L;
     init_list(&L);
-
     const char *DATAFILE = "patients.txt";
-
     while (1) {
         print_menu();
         int ch = read_int("Choose: ", 0, 7);
-
         if (ch == 0) break;
         else if (ch == 1) add_patient(&L);
         else if (ch == 2) serve_next(&L);
@@ -394,7 +376,6 @@ int main(void) {
         else if (ch == 6) save_to_file(&L, DATAFILE);
         else if (ch == 7) load_from_file(&L, DATAFILE);
     }
-
     free_list(&L);
     printf("Goodbye.\n");
     return 0;
